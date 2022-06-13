@@ -1,4 +1,5 @@
 #include "Walnut/Application.h"
+// ReSharper disable once CppUnusedIncludeDirective
 #include "Walnut/EntryPoint.h"
 
 #include "Walnut/Image.h"
@@ -19,17 +20,24 @@ public:
 	void DrawSettings()
 	{
 		ImGui::Begin("Settings");
-		ImGui::Text("Last render: %.3fms", _lastRenderTime);
-		ImGui::Text("Min render: %.3fms", _minRenderTime);
-		ImGui::Text("Max render: %.3fms", _maxRenderTime);
+		if (_lastRenderTime != 0.0f)
+		{
+			ImGui::Text("Last render: %.3fms", _lastRenderTime);
+			ImGui::Text("Min render: %.3fms", _minRenderTime);
+			ImGui::Text("Max render: %.3fms", _maxRenderTime);
+		}
+		else
+		{
+			ImGui::Text("Render for stats.");
+		}
+
 		if (ImGui::Button("Render"))
 		{
 			Render();
 		}
-		if (ImGui::Button("Toggle RealTime"))
-		{
-			_shouldRender = !_shouldRender;
-		}
+
+		ImGui::Checkbox("RealTime", &_shouldRender);
+
 		ImGui::End();
 	}
 
@@ -38,17 +46,20 @@ public:
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
 		ImGui::Begin("Viewport");
 
-		_viewportWidth = ImGui::GetContentRegionAvail().x;
-		_viewportHeight = ImGui::GetContentRegionAvail().y;
-
-		if (_shouldRender)
+		_viewportWidth = static_cast<uint32_t>(ImGui::GetContentRegionAvail().x > 0 ? ImGui::GetContentRegionAvail().x : 0);
+		_viewportHeight = static_cast<uint32_t>(ImGui::GetContentRegionAvail().y > 0 ? ImGui::GetContentRegionAvail().y : 0);
+		if (_viewportWidth > 0 && _viewportHeight > 0)
 		{
-			Render();
-		}
 
-		if (_image)
-		{
-			ImGui::Image(_image->GetDescriptorSet(), { (float)_image->GetWidth(),(float)_image->GetHeight() });
+			if (_shouldRender)
+			{
+				Render();
+			}
+
+			if (_image)
+			{
+				ImGui::Image(_image->GetDescriptorSet(), { (float)_image->GetWidth(),(float)_image->GetHeight() });
+			}
 		}
 
 		ImGui::End();
@@ -101,7 +112,7 @@ Walnut::Application* Walnut::CreateApplication(int argc, char** argv)
 	Walnut::ApplicationSpecification spec;
 	spec.Name = "Ray Tracing";
 
-	Walnut::Application* app = new Walnut::Application(spec);
+	auto* app = new Walnut::Application(spec);
 	app->PushLayer<ExampleLayer>();
 	app->SetMenubarCallback([app]()
 	{
