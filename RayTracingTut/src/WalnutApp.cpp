@@ -1,9 +1,9 @@
 #include "Walnut/Application.h"
 // ReSharper disable once CppUnusedIncludeDirective
+#include "Renderer.h"
 #include "Walnut/EntryPoint.h"
 
 #include "Walnut/Image.h"
-#include "Walnut/Random.h"
 #include "Walnut/Timer.h"
 
 using namespace Walnut;
@@ -38,6 +38,8 @@ public:
 
 		ImGui::Checkbox("RealTime", &_shouldRender);
 
+		ImGui::SliderFloat("Radius", &_renderer.Radius, 0.01f, 2.0f);
+
 		ImGui::End();
 	}
 
@@ -56,9 +58,11 @@ public:
 				Render();
 			}
 
-			if (_image)
+			if (auto image = _renderer.GetFinalImage())
 			{
-				ImGui::Image(_image->GetDescriptorSet(), { (float)_image->GetWidth(),(float)_image->GetHeight() });
+				ImGui::Image(image->GetDescriptorSet(),
+					{ static_cast<float>(image->GetWidth()), static_cast<float>(image->GetHeight()) },
+					ImVec2(0, 1), ImVec2(1, 0));
 			}
 		}
 
@@ -69,20 +73,10 @@ public:
 	void Render()
 	{
 		Timer timer;
-		uint32_t size = _viewportWidth * _viewportHeight;
-		if (!_image || _viewportWidth != _image->GetWidth() || _viewportHeight != _image->GetHeight())
-		{
-			_image = std::make_shared<Image>(_viewportWidth, _viewportHeight, ImageFormat::RGBA);
-			delete[] _imageData;
-			_imageData = new uint32_t[size];
-		}
-
-		for (uint32_t i = 0; i < size; i++)
-		{
-			_imageData[i] = Random::UInt();
-			_imageData[i] |= 0xff000000;
-		}
-		_image->SetData(_imageData);
+		// Renderer resize
+		_renderer.OnResize(_viewportWidth, _viewportHeight);
+		// Renderer render
+		_renderer.Render();
 
 		_lastRenderTime = timer.ElapsedMillis();
 		if (_lastRenderTime < _minRenderTime)
@@ -97,8 +91,7 @@ public:
 	}
 
 private:
-	std::shared_ptr<Image> _image = nullptr;
-	uint32_t* _imageData = nullptr;
+	Renderer _renderer;
 	uint32_t _viewportWidth = 0;
 	uint32_t _viewportHeight = 0;
 	float _lastRenderTime = 0.0f;
