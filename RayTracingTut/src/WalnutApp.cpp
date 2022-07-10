@@ -39,6 +39,17 @@ public:
 		ImGui::Checkbox("RealTime", &_shouldRender);
 
 		ImGui::SliderFloat("Radius", &_renderer.Radius, 0.01f, 2.0f);
+		ImGui::DragFloat3("Light", &_renderer.LightDir.x, 0.01f, -2.0f, 2.0f);
+		//const ImU32   u32_zero = 0, u32_one = 1, u32_fifty = 50, u32_min = 0, u32_max = UINT_MAX / 2, u32_hi_a = UINT_MAX / 2 - 100, u32_hi_b = UINT_MAX / 2;
+		auto valueF = ImGui::ColorConvertU32ToFloat4(_renderer.SphereColor);
+		ImGui::ColorPicker4("SphereColor", &valueF.x);
+		auto valueU = ImGui::ColorConvertFloat4ToU32(valueF);
+		_renderer.SphereColor = valueU;
+		valueF = ImGui::ColorConvertU32ToFloat4(_renderer.BackColor);
+		ImGui::ColorPicker4("BackColor", &valueF.x);
+		valueU = ImGui::ColorConvertFloat4ToU32(valueF);
+		_renderer.BackColor = valueU;
+
 
 		ImGui::End();
 	}
