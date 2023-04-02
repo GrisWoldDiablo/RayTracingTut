@@ -5,11 +5,10 @@
 #include <memory>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
 
-#include "Walnut/Random.h"
-#include "Walnut/Random.h"
-#include "Walnut/Random.h"
-#include "Walnut/Random.h"
+struct Ray;
+class Camera;
 
 class Renderer
 {
@@ -17,19 +16,17 @@ public:
 	Renderer();
 
 	void OnResize(uint32_t width, uint32_t height);
-	void Render();
+	void Render(const Camera& camera);
 	std::shared_ptr<Walnut::Image> GetFinalImage() const { return _finalImage; }
 
 	float Radius;
-	glm::vec3 RayOrigin;
-	glm::vec3 LightDir;
-	uint32_t SphereColor;
-	uint32_t BackColor;
-	float _aspectRatio;
+	glm::vec3 SpherePosition;
+	glm::vec3 LightPosition;
+	glm::vec4 SphereColor;
+	glm::vec4 BackColor;
 
 private:
-	uint32_t PerPixel(glm::vec2 coord);
-
+	glm::vec4 TraceRay(const Ray& ray);
 
 	std::shared_ptr<Walnut::Image> _finalImage;
 	uint32_t* _imageData = nullptr;

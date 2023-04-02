@@ -1,8 +1,9 @@
 #include "Walnut/Application.h"
 // ReSharper disable once CppUnusedIncludeDirective
+#include "Camera.h"
 #include "Renderer.h"
 #include "Walnut/EntryPoint.h"
-
+#include "imgui.h"
 #include "Walnut/Image.h"
 #include "Walnut/Timer.h"
 
@@ -11,6 +12,14 @@ using namespace Walnut;
 class ExampleLayer : public Walnut::Layer
 {
 public:
+	ExampleLayer()
+		: _camera(45.0f, 0.1f, 100.0f) {}
+
+	virtual void OnUpdate(float ts) override
+	{
+		_camera.OnUpdate(ts);
+	}
+
 	virtual void OnUIRender() override
 	{
 		DrawSettings();
@@ -39,18 +48,10 @@ public:
 		ImGui::Checkbox("RealTime", &_shouldRender);
 
 		ImGui::SliderFloat("Radius", &_renderer.Radius, 0.01f, 2.0f);
-		ImGui::DragFloat3("Light", &_renderer.LightDir.x, 0.01f, -2.0f, 2.0f);
-		//const ImU32   u32_zero = 0, u32_one = 1, u32_fifty = 50, u32_min = 0, u32_max = UINT_MAX / 2, u32_hi_a = UINT_MAX / 2 - 100, u32_hi_b = UINT_MAX / 2;
-		auto valueF = ImGui::ColorConvertU32ToFloat4(_renderer.SphereColor);
-		ImGui::ColorPicker4("SphereColor", &valueF.x);
-		auto valueU = ImGui::ColorConvertFloat4ToU32(valueF);
-		_renderer.SphereColor = valueU;
-		valueF = ImGui::ColorConvertU32ToFloat4(_renderer.BackColor);
-		ImGui::ColorPicker4("BackColor", &valueF.x);
-		valueU = ImGui::ColorConvertFloat4ToU32(valueF);
-		_renderer.BackColor = valueU;
-
-
+		ImGui::DragFloat3("Sphere Position", &_renderer.SpherePosition.x, 0.01f, -10.0f, 10.0f);
+		ImGui::DragFloat3("Light Position", &_renderer.LightPosition.x, 0.01f, -10.0f, 10.0f);
+		ImGui::ColorPicker4("SphereColor", &_renderer.SphereColor.r);
+		ImGui::ColorPicker4("BackColor", &_renderer.BackColor.r);
 		ImGui::End();
 	}
 
@@ -63,7 +64,6 @@ public:
 		_viewportHeight = static_cast<uint32_t>(ImGui::GetContentRegionAvail().y > 0 ? ImGui::GetContentRegionAvail().y : 0);
 		if (_viewportWidth > 0 && _viewportHeight > 0)
 		{
-
 			if (_shouldRender)
 			{
 				Render();
@@ -72,7 +72,7 @@ public:
 			if (auto image = _renderer.GetFinalImage())
 			{
 				ImGui::Image(image->GetDescriptorSet(),
-					{ static_cast<float>(image->GetWidth()), static_cast<float>(image->GetHeight()) },
+					{static_cast<float>(image->GetWidth()), static_cast<float>(image->GetHeight())},
 					ImVec2(0, 1), ImVec2(1, 0));
 			}
 		}
@@ -86,8 +86,9 @@ public:
 		Timer timer;
 		// Renderer resize
 		_renderer.OnResize(_viewportWidth, _viewportHeight);
+		_camera.OnResize(_viewportWidth, _viewportHeight);
 		// Renderer render
-		_renderer.Render();
+		_renderer.Render(_camera);
 
 		_lastRenderTime = timer.ElapsedMillis();
 		if (_lastRenderTime < _minRenderTime)
@@ -103,6 +104,7 @@ public:
 
 private:
 	Renderer _renderer;
+	Camera _camera;
 	uint32_t _viewportWidth = 0;
 	uint32_t _viewportHeight = 0;
 	float _lastRenderTime = 0.0f;
