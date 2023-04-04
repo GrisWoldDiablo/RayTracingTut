@@ -2,6 +2,8 @@
 
 #include <complex>
 #include <iostream>
+#include <glm/ext/scalar_constants.hpp>
+#include <glm/gtc/epsilon.hpp>
 
 #include "Camera.h"
 #include "Ray.h"
@@ -20,10 +22,9 @@ namespace Utils
 }
 
 Renderer::Renderer()
-	: Radius(0.5f),
-	SpherePosition(0.0f, 0.0f, 0.0f),
+	: TheSphere({0.5f, {0.0f, 0.0f, 0.0f}, {1.0f, 0.f, 1.0f, 1.0f}}),
+	TheSphere2({0.2f, {-1.5f, 0.0f, 0.0f}, {0.0f, 0.f, 1.0f, 1.0f}}),
 	LightPosition(1.0f, 1.0f, 1.0f),
-	SphereColor(1.0f, 0.f, 1.0f, 1.0f),
 	BackColor(0.5f, 0.5f, 0.5f, 1.0f) {}
 
 void Renderer::OnResize(uint32_t width, uint32_t height)
@@ -60,44 +61,50 @@ void Renderer::Render(const Camera& camera)
 	_finalImage->SetData(_imageData);
 }
 
-glm::vec4 Renderer::TraceRay(const Ray& ray)
+glm::vec4 Renderer::TraceRay(const Ray& ray) const
 {
-	glm::vec4 color = SphereColor;
-	glm::vec3 lightDir = glm::normalize(LightPosition - SpherePosition);
+	float bestHit = FLT_MAX;
+	glm::vec4 color;
+	TraceSphere(ray, TheSphere, bestHit, color);
+	TraceSphere(ray, TheSphere2, bestHit, color);
 
-	// (bx^2 + by^2 + bz^2)t^2 + (2(axbx + ayby + azbz))t + (ax^2 + ay^2 + az^2 - r^2) = 0
+	return color;
+}
 
-	// a = ray origin
-	// b = ray direction
-	// r = radius
-	// t = hit distance
+void Renderer::TraceSphere(const Ray& ray, const Sphere& sphere, float& bestHit, glm::vec4& color) const
+{
+	glm::vec4 sphereAlbedo = sphere.Albedo;
+	const glm::vec3 lightDir = glm::normalize(LightPosition - sphere.Position);
 
-	//float a = rayDirection.x * rayDirection.x
-	//		+ rayDirection.y * rayDirection.y
-	//		+ rayDirection.z * rayDirection.z;
-
-	const glm::vec3 rayOrigin = ray.Origin - SpherePosition;
+	const glm::vec3 rayOrigin = ray.Origin - sphere.Position;
 	float a = glm::dot(ray.Direction, ray.Direction);
 	float b = 2.0f * glm::dot(rayOrigin, ray.Direction);
-	float c = glm::dot(rayOrigin, rayOrigin) - Radius * Radius;
-
-	// Quadratic formula discriminant
-	// b^2 - 4ac
-	// (-b +- sqrt(discriminant)) / (2.0f * a)
+	float c = glm::dot(rayOrigin, rayOrigin) - sphere.Radius * sphere.Radius;
 
 	const float discriminant = b * b - 4.0f * a * c;
 
 	if (discriminant < 0.0f)
 	{
-		return BackColor;
+		if (glm::epsilonEqual(bestHit, FLT_MAX, glm::epsilon<float>()))
+		{
+			color = BackColor;
+		}
+		return;
 	}
 
 	float closesT = (-b - glm::sqrt(discriminant)) / (2.0f * a);
 	float t0 = (-b + glm::sqrt(discriminant)) / (2.0f * a);
 
+	if (bestHit < closesT)
+	{
+		return;
+	}
+
+	bestHit = closesT;
+
 	glm::vec3 hitPosition = rayOrigin + ray.Direction * closesT;
 	glm::vec3 normal = glm::normalize(hitPosition);
 	float lightIntensity = glm::max(0.0f, glm::dot(normal, lightDir));
 
-	return color * lightIntensity;
+	color = sphereAlbedo * lightIntensity;
 }

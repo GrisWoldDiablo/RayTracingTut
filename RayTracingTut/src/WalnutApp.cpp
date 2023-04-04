@@ -47,10 +47,10 @@ public:
 
 		ImGui::Checkbox("RealTime", &_shouldRender);
 
-		ImGui::SliderFloat("Radius", &_renderer.Radius, 0.01f, 2.0f);
-		ImGui::DragFloat3("Sphere Position", &_renderer.SpherePosition.x, 0.01f, -10.0f, 10.0f);
+		ImGui::SliderFloat("Radius", &_renderer.TheSphere.Radius, 0.01f, 2.0f);
+		ImGui::DragFloat3("Sphere Position", &_renderer.TheSphere.Position.x, 0.01f, -10.0f, 10.0f);
 		ImGui::DragFloat3("Light Position", &_renderer.LightPosition.x, 0.01f, -10.0f, 10.0f);
-		ImGui::ColorPicker4("SphereColor", &_renderer.SphereColor.r);
+		ImGui::ColorPicker4("SphereColor", &_renderer.TheSphere.Albedo.r);
 		ImGui::ColorPicker4("BackColor", &_renderer.BackColor.r);
 		ImGui::End();
 	}
