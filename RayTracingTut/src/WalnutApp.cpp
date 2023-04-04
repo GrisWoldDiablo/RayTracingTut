@@ -4,8 +4,11 @@
 #include "Renderer.h"
 #include "Walnut/EntryPoint.h"
 #include "imgui.h"
+#include "Scene.h"
 #include "Walnut/Image.h"
 #include "Walnut/Timer.h"
+
+#include <glm/gtc/type_ptr.hpp>
 
 using namespace Walnut;
 
@@ -13,7 +16,11 @@ class ExampleLayer : public Walnut::Layer
 {
 public:
 	ExampleLayer()
-		: _camera(45.0f, 0.1f, 100.0f) {}
+		: _camera(45.0f, 0.1f, 100.0f)
+	{
+		_scene.Spheres.push_back(Sphere{0.5f, {0.0f, 0.0f, 0.0f}, {1.0f, 0.f, 1.0f}});
+		_scene.Spheres.push_back(Sphere{0.2f, {-1.5f, 0.0f, 0.0f}, {0.0f, 0.f, 1.0f}});
+	}
 
 	virtual void OnUpdate(float ts) override
 	{
@@ -46,12 +53,22 @@ public:
 		}
 
 		ImGui::Checkbox("RealTime", &_shouldRender);
-
-		ImGui::SliderFloat("Radius", &_renderer.TheSphere.Radius, 0.01f, 2.0f);
-		ImGui::DragFloat3("Sphere Position", &_renderer.TheSphere.Position.x, 0.01f, -10.0f, 10.0f);
 		ImGui::DragFloat3("Light Position", &_renderer.LightPosition.x, 0.01f, -10.0f, 10.0f);
-		ImGui::ColorPicker4("SphereColor", &_renderer.TheSphere.Albedo.r);
-		ImGui::ColorPicker4("BackColor", &_renderer.BackColor.r);
+		ImGui::ColorEdit4("BackColor", &_renderer.BackColor.r);
+		ImGui::End();
+
+		ImGui::Begin("Scene");
+		for (size_t i = 0; i < _scene.Spheres.size(); i++)
+		{
+			Sphere& sphere =_scene.Spheres[i];
+			ImGui::PushID(i);
+			ImGui::SliderFloat("Radius", &sphere.Radius, 0.01f, 2.0f);
+			ImGui::DragFloat3("Position", glm::value_ptr(sphere.Position), 0.01f, -10.0f, 10.0f);
+			ImGui::ColorEdit3("Color", glm::value_ptr(sphere.Albedo));
+			ImGui::PopID();
+			ImGui::Separator();
+		}
+		
 		ImGui::End();
 	}
 
@@ -88,7 +105,7 @@ public:
 		_renderer.OnResize(_viewportWidth, _viewportHeight);
 		_camera.OnResize(_viewportWidth, _viewportHeight);
 		// Renderer render
-		_renderer.Render(_camera);
+		_renderer.Render(_scene, _camera);
 
 		_lastRenderTime = timer.ElapsedMillis();
 		if (_lastRenderTime < _minRenderTime)
@@ -105,6 +122,8 @@ public:
 private:
 	Renderer _renderer;
 	Camera _camera;
+	Scene _scene;
+
 	uint32_t _viewportWidth = 0;
 	uint32_t _viewportHeight = 0;
 	float _lastRenderTime = 0.0f;

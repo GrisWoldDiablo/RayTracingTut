@@ -5,6 +5,7 @@
 #include <glm/ext/scalar_constants.hpp>
 #include <glm/gtc/epsilon.hpp>
 
+#include "Scene.h"
 #include "Camera.h"
 #include "Ray.h"
 
@@ -22,9 +23,7 @@ namespace Utils
 }
 
 Renderer::Renderer()
-	: TheSphere({0.5f, {0.0f, 0.0f, 0.0f}, {1.0f, 0.f, 1.0f, 1.0f}}),
-	TheSphere2({0.2f, {-1.5f, 0.0f, 0.0f}, {0.0f, 0.f, 1.0f, 1.0f}}),
-	LightPosition(1.0f, 1.0f, 1.0f),
+	: LightPosition(1.0f, 1.0f, 1.0f),
 	BackColor(0.5f, 0.5f, 0.5f, 1.0f) {}
 
 void Renderer::OnResize(uint32_t width, uint32_t height)
@@ -43,7 +42,7 @@ void Renderer::OnResize(uint32_t width, uint32_t height)
 	_imageData = new uint32_t[size];
 }
 
-void Renderer::Render(const Camera& camera)
+void Renderer::Render(const Scene& scene, const Camera& camera)
 {
 	Ray ray;
 	ray.Origin = camera.GetPosition();
@@ -54,57 +53,87 @@ void Renderer::Render(const Camera& camera)
 		for (uint32_t x = 0; x < _finalImage->GetWidth(); x++)
 		{
 			ray.Direction = camera.GetRayDirections()[x + y * _finalImage->GetWidth()];
-			_imageData[x + y * _finalImage->GetWidth()] = Utils::ConvertToRGBA(TraceRay(ray));
+			_imageData[x + y * _finalImage->GetWidth()] = Utils::ConvertToRGBA(TraceRay(scene, ray));
 		}
 	}
 
 	_finalImage->SetData(_imageData);
 }
 
-glm::vec4 Renderer::TraceRay(const Ray& ray) const
+glm::vec4 Renderer::TraceRay(const Scene& scene, const Ray& ray) const
 {
-	float bestHit = FLT_MAX;
-	glm::vec4 color;
-	TraceSphere(ray, TheSphere, bestHit, color);
-	TraceSphere(ray, TheSphere2, bestHit, color);
+	if (scene.Spheres.empty())
+	{
+		return BackColor;
+	}
 
-	return color;
+	const Sphere* closestSphere = nullptr;
+	float closestHit = FLT_MAX;
+	for (const auto& sphere : scene.Spheres)
+	{
+		if (IntersectSphere(ray, sphere, closestHit))
+		{
+			closestSphere = &sphere;
+		}
+	}
+
+	if (closestSphere == nullptr)
+	{
+		return BackColor;
+	}
+
+	return DrawSphere(ray, *closestSphere, closestHit);
 }
 
-void Renderer::TraceSphere(const Ray& ray, const Sphere& sphere, float& bestHit, glm::vec4& color) const
+bool Renderer::IntersectSphere(const Ray& ray, const Sphere& sphere, float& closestHit) const
 {
-	glm::vec4 sphereAlbedo = sphere.Albedo;
-	const glm::vec3 lightDir = glm::normalize(LightPosition - sphere.Position);
-
 	const glm::vec3 rayOrigin = ray.Origin - sphere.Position;
-	float a = glm::dot(ray.Direction, ray.Direction);
-	float b = 2.0f * glm::dot(rayOrigin, ray.Direction);
-	float c = glm::dot(rayOrigin, rayOrigin) - sphere.Radius * sphere.Radius;
+	const float a = glm::dot(ray.Direction, ray.Direction);
+	const float b = 2.0f * glm::dot(rayOrigin, ray.Direction);
+	const float c = glm::dot(rayOrigin, rayOrigin) - sphere.Radius * sphere.Radius;
 
 	const float discriminant = b * b - 4.0f * a * c;
 
 	if (discriminant < 0.0f)
 	{
-		if (glm::epsilonEqual(bestHit, FLT_MAX, glm::epsilon<float>()))
-		{
-			color = BackColor;
-		}
-		return;
+		return false;
 	}
 
-	float closesT = (-b - glm::sqrt(discriminant)) / (2.0f * a);
+	// Get the closest point on the sphere from the camera
+	float closestT = (-b - glm::sqrt(discriminant)) / (2.0f * a);
+	// Get the point the second intersection point after closest point.
 	float t0 = (-b + glm::sqrt(discriminant)) / (2.0f * a);
 
-	if (bestHit < closesT)
+	// If the closest point is negative it means it is behind the camera.
+	if (closestT < 0.0f)
 	{
-		return;
+		// If the second point is also negative it means it is also behind the camera.
+		if (t0 < 0.0f)
+		{
+			return false;
+		}
+		
+		// Else it means we are inside the sphere so we will use the second point.
+		closestT = t0;
 	}
 
-	bestHit = closesT;
+	if (closestT < closestHit)
+	{
+		closestHit = closestT;
+		return true;
+	}
 
-	glm::vec3 hitPosition = rayOrigin + ray.Direction * closesT;
-	glm::vec3 normal = glm::normalize(hitPosition);
-	float lightIntensity = glm::max(0.0f, glm::dot(normal, lightDir));
+	return false;
+}
 
-	color = sphereAlbedo * lightIntensity;
+glm::vec4 Renderer::DrawSphere(const Ray& ray, const Sphere& sphere, float hitPoint) const
+{
+	const glm::vec3 rayOrigin = ray.Origin - sphere.Position;
+	const glm::vec3 lightDir = glm::normalize(LightPosition - sphere.Position);
+
+	const glm::vec3 hitPosition = rayOrigin + ray.Direction * hitPoint;
+	const glm::vec3 normal = glm::normalize(hitPosition);
+	const float lightIntensity = glm::max(0.0f, glm::dot(normal, lightDir));
+
+	return glm::vec4(sphere.Albedo * lightIntensity, 1.0f);
 }
