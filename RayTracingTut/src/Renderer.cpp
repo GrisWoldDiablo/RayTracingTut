@@ -7,6 +7,7 @@
 #include "Scene.h"
 #include "Camera.h"
 #include "Ray.h"
+#include "Walnut/Random.h"
 
 namespace Utils
 {
@@ -106,15 +107,23 @@ glm::vec4 Renderer::PerPixel(uint32_t x, uint32_t y) const
 		const glm::vec3 lightDir = glm::normalize(LightDirection);
 		float lightIntensity = glm::max(0.0f, glm::dot(payload.WorldNormal, -lightDir));
 
-		const Sphere& closestSphere = _activeScene->Spheres[payload.ObjectIndex];
-		auto sphereColor = closestSphere.Albedo;
+		const Sphere& sphere = _activeScene->Spheres[payload.ObjectIndex];
+		if (sphere.MaterialIndex > _activeScene->Materials.size() - 1)
+		{
+			break;
+		}
+		
+		const Material& material = _activeScene->Materials[sphere.MaterialIndex];
+		
+		auto sphereColor = material.Albedo;
 		sphereColor *= lightIntensity;
 
 		color += sphereColor * multiplier;
-		multiplier *= 0.7f;
+		multiplier *= 0.5f;
 
 		ray.Origin = payload.WorldPosition + payload.WorldNormal * 0.0001f;
-		ray.Direction = glm::reflect(ray.Direction, payload.WorldNormal);
+		ray.Direction = glm::reflect(ray.Direction,
+			payload.WorldNormal + material.Roughness * Walnut::Random::Vec3(-0.5f, 0.5f));
 	}
 
 	return glm::vec4(color, 1.0f);

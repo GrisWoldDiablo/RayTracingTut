@@ -1,5 +1,4 @@
 #include "Walnut/Application.h"
-// ReSharper disable once CppUnusedIncludeDirective
 #include "Camera.h"
 #include "Renderer.h"
 #include "Walnut/EntryPoint.h"
@@ -18,8 +17,29 @@ public:
 	ExampleLayer()
 		: _camera(45.0f, 0.1f, 100.0f)
 	{
-		_scene.Spheres.push_back(Sphere{0.5f, {0.0f, 0.0f, 0.0f}, {1.0f, 0.4f, 1.0f}});
-		_scene.Spheres.push_back(Sphere{0.2f, {-1.5f, 0.0f, 0.0f}, {0.2f, 0.9f, 1.0f}});
+		{
+			Material& material = _scene.Materials.emplace_back();;
+			material.Albedo = {1.0f, 0.4f, 1.0f};
+			material.Roughness = 0.0f;
+
+			Sphere sphere;
+			sphere.Radius = 1.0f;
+			sphere.Position = {0.0f, 0.0f, 0.0f};
+			sphere.MaterialIndex = 0;
+			_scene.Spheres.push_back(sphere);
+		}
+
+		{
+			Material& material = _scene.Materials.emplace_back();;
+			material.Albedo = {0.2f, 0.9f, 1.0f};
+			material.Roughness = 0.2f;
+
+			Sphere sphere;
+			sphere.Radius = 100.0f;
+			sphere.Position = {0.0f, -101.0f, 0.0f};
+			sphere.MaterialIndex = 1;
+			_scene.Spheres.push_back(sphere);
+		}
 	}
 
 	virtual void OnUpdate(float ts) override
@@ -30,7 +50,24 @@ public:
 	virtual void OnUIRender() override
 	{
 		DrawSettings();
+		DrawScenes();
+		DrawSpheres();
+		DrawMaterials();
 		DrawViewport();
+	}
+
+	void DrawMaterialControl(Material& material) const
+	{
+		ImGui::ColorEdit3("Color", glm::value_ptr(material.Albedo));
+		ImGui::DragFloat("Roughness", &material.Roughness, 0.01f, 0.0f, 1.0f);
+		ImGui::DragFloat("Metallic", &material.Metallic, 0.01f, 0.0f, 1.0f);
+	}
+
+	void DrawSphereControl(Sphere& sphere) const
+	{
+		ImGui::DragFloat("Radius", &sphere.Radius, 0.01f, 1000.0f);
+		ImGui::DragFloat3("Position", glm::value_ptr(sphere.Position), 0.01f);
+		ImGui::DragInt("Material Index", &sphere.MaterialIndex, 1.0f, 0, static_cast<int>(_scene.Materials.size() - 1));
 	}
 
 	void DrawSettings()
@@ -53,16 +90,18 @@ public:
 		}
 
 		ImGui::Checkbox("RealTime", &_shouldRender);
-		ImGui::DragFloat3("Light Direction", glm::value_ptr(_renderer.LightDirection), 0.01f, -10.0f, 10.0f);
+		ImGui::DragFloat3("Light Direction", glm::value_ptr(_renderer.LightDirection), 0.01f, -1.0f, 1.0f);
 		ImGui::ColorEdit3("BackColor", glm::value_ptr(_renderer.BackColor));
 		ImGui::DragInt("Bounces", &_renderer.Bounces, 1, 1, 10);
 		ImGui::End();
+	}
 
+	void DrawScenes()
+	{
 		ImGui::Begin("Scene");
+
 		static Sphere newSphere;
-		ImGui::SliderFloat("Radius", &newSphere.Radius, 0.01f, 2.0f);
-		ImGui::DragFloat3("Position", glm::value_ptr(newSphere.Position), 0.01f, -10.0f, 10.0f);
-		ImGui::ColorEdit3("Color", glm::value_ptr(newSphere.Albedo));
+		DrawSphereControl(newSphere);
 
 		if (ImGui::Button("Add Sphere"))
 		{
@@ -75,15 +114,35 @@ public:
 			_scene.Spheres.clear();
 		}
 
-		ImGui::Separator();
+		ImGui::End();
+	}
+
+	void DrawSpheres()
+	{
+		ImGui::Begin("Spheres");
 
 		for (size_t i = 0; i < _scene.Spheres.size(); i++)
 		{
 			Sphere& sphere = _scene.Spheres[i];
-			ImGui::PushID(i);
-			ImGui::SliderFloat("Radius", &sphere.Radius, 0.01f, 2.0f);
-			ImGui::DragFloat3("Position", glm::value_ptr(sphere.Position), 0.01f, -10.0f, 10.0f);
-			ImGui::ColorEdit3("Color", glm::value_ptr(sphere.Albedo));
+			ImGui::PushID(static_cast<int>(i));
+			DrawSphereControl(sphere);
+			ImGui::PopID();
+			ImGui::Separator();
+		}
+
+		ImGui::End();
+	}
+
+	void DrawMaterials()
+	{
+		ImGui::Begin("Materials");
+		
+		for (size_t i = 0; i < _scene.Materials.size(); i++)
+		{
+			Material& material = _scene.Materials[i];
+			ImGui::PushID(static_cast<int>(i));
+			ImGui::Text(std::format("Index {0}", i).c_str());
+			DrawMaterialControl(material);
 			ImGui::PopID();
 			ImGui::Separator();
 		}

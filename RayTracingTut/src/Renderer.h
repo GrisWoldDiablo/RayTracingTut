@@ -7,9 +7,8 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
-#include "Sphere.h"
-
 struct Scene;
+struct Sphere;
 struct Ray;
 class Camera;
 
