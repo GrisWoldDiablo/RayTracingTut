@@ -18,8 +18,8 @@ public:
 	ExampleLayer()
 		: _camera(45.0f, 0.1f, 100.0f)
 	{
-		_scene.Spheres.push_back(Sphere{0.5f, {0.0f, 0.0f, 0.0f}, {1.0f, 0.f, 1.0f}});
-		_scene.Spheres.push_back(Sphere{0.2f, {-1.5f, 0.0f, 0.0f}, {0.0f, 0.f, 1.0f}});
+		_scene.Spheres.push_back(Sphere{0.5f, {0.0f, 0.0f, 0.0f}, {1.0f, 0.4f, 1.0f}});
+		_scene.Spheres.push_back(Sphere{0.2f, {-1.5f, 0.0f, 0.0f}, {0.2f, 0.9f, 1.0f}});
 	}
 
 	virtual void OnUpdate(float ts) override
@@ -53,14 +53,33 @@ public:
 		}
 
 		ImGui::Checkbox("RealTime", &_shouldRender);
-		ImGui::DragFloat3("Light Position", &_renderer.LightPosition.x, 0.01f, -10.0f, 10.0f);
-		ImGui::ColorEdit4("BackColor", &_renderer.BackColor.r);
+		ImGui::DragFloat3("Light Direction", glm::value_ptr(_renderer.LightDirection), 0.01f, -10.0f, 10.0f);
+		ImGui::ColorEdit3("BackColor", glm::value_ptr(_renderer.BackColor));
+		ImGui::DragInt("Bounces", &_renderer.Bounces, 1, 1, 10);
 		ImGui::End();
 
 		ImGui::Begin("Scene");
+		static Sphere newSphere;
+		ImGui::SliderFloat("Radius", &newSphere.Radius, 0.01f, 2.0f);
+		ImGui::DragFloat3("Position", glm::value_ptr(newSphere.Position), 0.01f, -10.0f, 10.0f);
+		ImGui::ColorEdit3("Color", glm::value_ptr(newSphere.Albedo));
+
+		if (ImGui::Button("Add Sphere"))
+		{
+			_scene.Spheres.push_back(newSphere);
+		}
+
+		ImGui::SameLine();
+		if (ImGui::Button("Clear Spheres"))
+		{
+			_scene.Spheres.clear();
+		}
+
+		ImGui::Separator();
+
 		for (size_t i = 0; i < _scene.Spheres.size(); i++)
 		{
-			Sphere& sphere =_scene.Spheres[i];
+			Sphere& sphere = _scene.Spheres[i];
 			ImGui::PushID(i);
 			ImGui::SliderFloat("Radius", &sphere.Radius, 0.01f, 2.0f);
 			ImGui::DragFloat3("Position", glm::value_ptr(sphere.Position), 0.01f, -10.0f, 10.0f);
@@ -68,7 +87,7 @@ public:
 			ImGui::PopID();
 			ImGui::Separator();
 		}
-		
+
 		ImGui::End();
 	}
 
@@ -86,7 +105,7 @@ public:
 				Render();
 			}
 
-			if (auto image = _renderer.GetFinalImage())
+			if (const auto image = _renderer.GetFinalImage())
 			{
 				ImGui::Image(image->GetDescriptorSet(),
 					{static_cast<float>(image->GetWidth()), static_cast<float>(image->GetHeight())},
