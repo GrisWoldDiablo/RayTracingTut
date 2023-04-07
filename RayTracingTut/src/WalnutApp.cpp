@@ -32,7 +32,7 @@ public:
 		{
 			Material& material = _scene.Materials.emplace_back();;
 			material.Albedo = {0.2f, 0.9f, 1.0f};
-			material.Roughness = 0.2f;
+			material.Roughness = 0.02f;
 
 			Sphere sphere;
 			sphere.Radius = 100.0f;
@@ -40,11 +40,16 @@ public:
 			sphere.MaterialIndex = 1;
 			_scene.Spheres.push_back(sphere);
 		}
+
+		_renderTimes.resize(100);
 	}
 
 	virtual void OnUpdate(float ts) override
 	{
-		_camera.OnUpdate(ts);
+		if (_camera.OnUpdate(ts))
+		{
+			_renderer.ResetFrameIndex();
+		}
 	}
 
 	virtual void OnUIRender() override
@@ -78,15 +83,24 @@ public:
 			ImGui::Text("Last render: %.3fms", _lastRenderTime);
 			ImGui::Text("Min render: %.3fms", _minRenderTime);
 			ImGui::Text("Max render: %.3fms", _maxRenderTime);
+			ImGui::Text("Average render: %.3fms", _averageRenderTime);
 		}
 		else
 		{
 			ImGui::Text("Render for stats.");
 		}
 
+		ImGui::Checkbox("MultiThread", &_renderer.IsMultiThread);
+		ImGui::Checkbox("MultiThreadInner", &_renderer.IsMultiThreadInner);
 		if (ImGui::Button("Render"))
 		{
 			Render();
+		}
+
+		ImGui::Checkbox("Accumulate", &_renderer.GetSettings().ShouldAccumulate);
+		if (ImGui::Button("Reset"))
+		{
+			_renderer.ResetFrameIndex();
 		}
 
 		ImGui::Checkbox("RealTime", &_shouldRender);
@@ -136,7 +150,7 @@ public:
 	void DrawMaterials()
 	{
 		ImGui::Begin("Materials");
-		
+
 		for (size_t i = 0; i < _scene.Materials.size(); i++)
 		{
 			Material& material = _scene.Materials[i];
@@ -195,6 +209,21 @@ public:
 		{
 			_maxRenderTime = _lastRenderTime;
 		}
+
+		_renderTimes[_renderedFrame] = _lastRenderTime;
+		_renderedFrame++;
+		if (_renderedFrame >= _renderTimes.size())
+		{
+			_renderedFrame = 0;
+		}
+		
+		float renderTimeTotal = 0;
+		for (const float _renderTime : _renderTimes)
+		{
+			renderTimeTotal += _renderTime;
+		}
+
+		_averageRenderTime = renderTimeTotal / static_cast<float>(_renderTimes.size());
 	}
 
 private:
@@ -207,6 +236,11 @@ private:
 	float _lastRenderTime = 0.0f;
 	float _minRenderTime = FLT_MAX;
 	float _maxRenderTime = 0.0f;
+
+	int _renderedFrame = 0;
+	std::vector<float> _renderTimes;
+	float _averageRenderTime;
+
 	bool _shouldRender = false;
 };
 

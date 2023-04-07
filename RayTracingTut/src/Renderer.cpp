@@ -1,26 +1,15 @@
 #include "Renderer.h"
 
 #include <complex>
-#include <iostream>
+#include <dinput.h>
+#include <execution>
 #include <glm/gtc/epsilon.hpp>
 
 #include "Scene.h"
 #include "Camera.h"
 #include "Ray.h"
+#include "Utils.h"
 #include "Walnut/Random.h"
-
-namespace Utils
-{
-	uint32_t ConvertToRGBA(const glm::vec4& color)
-	{
-		const auto r = static_cast<uint8_t>(color.r * 255.0f);
-		const auto g = static_cast<uint8_t>(color.g * 255.0f);
-		const auto b = static_cast<uint8_t>(color.b * 255.0f);
-		const auto a = static_cast<uint8_t>(color.a * 255.0f);
-		const uint32_t result = (a << 24) | (b << 16) | (g << 8) | r;
-		return result;
-	}
-}
 
 Renderer::Renderer()
 	: Bounces(2),
@@ -31,6 +20,11 @@ void Renderer::OnResize(uint32_t width, uint32_t height)
 {
 	if (_finalImage)
 	{
+		if (_finalImage->GetWidth() == width && _finalImage->GetHeight() == height)
+		{
+			return;
+		}
+
 		_finalImage->Resize(width, height);
 	}
 	else
@@ -38,9 +32,24 @@ void Renderer::OnResize(uint32_t width, uint32_t height)
 		_finalImage = std::make_shared<Walnut::Image>(width, height, Walnut::ImageFormat::RGBA);
 	}
 
-	uint32_t size = width * height;
+	const uint32_t size = width * height;
 	delete[] _imageData;
 	_imageData = new uint32_t[size];
+
+	delete[] _accumulationData;
+	_accumulationData = new glm::vec4[size];
+
+	_imageHorIter.resize(width);
+	for (uint32_t i = 0; i < width; i++)
+	{
+		_imageHorIter[i] = i;
+	}
+
+	_imageVertIter.resize(height);
+	for (uint32_t i = 0; i < height; i++)
+	{
+		_imageVertIter[i] = i;
+	}
 }
 
 void Renderer::Render(const Scene& scene, const Camera& camera)
@@ -48,41 +57,75 @@ void Renderer::Render(const Scene& scene, const Camera& camera)
 	_activeScene = &scene;
 	_activeCamera = &camera;
 
-	// render every pixel
-	for (uint32_t y = 0; y < _finalImage->GetHeight(); y++)
+	if (_frameIndex == 1)
 	{
-		for (uint32_t x = 0; x < _finalImage->GetWidth(); x++)
+		memset(_accumulationData, 0, _finalImage->GetWidth() * _finalImage->GetHeight() * sizeof(glm::vec4));
+	}
+
+	if (IsMultiThread)
+	{
+		std::for_each(std::execution::par, _imageVertIter.begin(), _imageVertIter.end(),
+			[this](uint32_t y)
+			{
+				if (IsMultiThreadInner)
+				{
+					std::for_each(std::execution::par, _imageHorIter.begin(), _imageHorIter.end(),
+						[this,y](uint32_t x)
+						{
+							const auto color = PerPixel(x, y);
+							_accumulationData[x + y * _finalImage->GetWidth()] += color;
+
+							glm::vec4 accumulatedColor = _accumulationData[x + y * _finalImage->GetWidth()];
+							accumulatedColor /= static_cast<float>(_frameIndex);
+
+							accumulatedColor = glm::clamp(accumulatedColor, glm::vec4(0.0f), glm::vec4(1.0f));
+							_imageData[x + y * _finalImage->GetWidth()] = Utils::ConvertToRGBA(accumulatedColor);
+						});
+				}
+				else
+				{
+					for (uint32_t x = 0; x < _finalImage->GetWidth(); x++)
+					{
+						const auto color = PerPixel(x, y);
+						_accumulationData[x + y * _finalImage->GetWidth()] += color;
+
+						glm::vec4 accumulatedColor = _accumulationData[x + y * _finalImage->GetWidth()];
+						accumulatedColor /= static_cast<float>(_frameIndex);
+
+						accumulatedColor = glm::clamp(accumulatedColor, glm::vec4(0.0f), glm::vec4(1.0f));
+						_imageData[x + y * _finalImage->GetWidth()] = Utils::ConvertToRGBA(accumulatedColor);
+					}
+				}
+			});
+	}
+	else
+	{
+		// render every pixel
+		for (uint32_t y = 0; y < _finalImage->GetHeight(); y++)
 		{
-			auto color = PerPixel(x, y);
-			color = glm::clamp(color, glm::vec4(0.0f), glm::vec4(1.0f));
-			_imageData[x + y * _finalImage->GetWidth()] = Utils::ConvertToRGBA(color);
+			for (uint32_t x = 0; x < _finalImage->GetWidth(); x++)
+			{
+				const auto color = PerPixel(x, y);
+				_accumulationData[x + y * _finalImage->GetWidth()] += color;
+
+				glm::vec4 accumulatedColor = _accumulationData[x + y * _finalImage->GetWidth()];
+				accumulatedColor /= static_cast<float>(_frameIndex);
+
+				accumulatedColor = glm::clamp(accumulatedColor, glm::vec4(0.0f), glm::vec4(1.0f));
+				_imageData[x + y * _finalImage->GetWidth()] = Utils::ConvertToRGBA(accumulatedColor);
+			}
 		}
 	}
 
 	_finalImage->SetData(_imageData);
-}
-
-Renderer::HitPayload Renderer::TraceRay(const Ray& ray) const
-{
-	int closestSphere = -1;
-	float closestHit = std::numeric_limits<float>::max();
-	for (size_t i = 0; i < _activeScene->Spheres.size(); i++)
+	if (_settings.ShouldAccumulate)
 	{
-		const auto& sphere = _activeScene->Spheres[i];
-		if (IntersectSphere(ray, sphere, closestHit))
-		{
-			closestSphere = static_cast<int>(i);
-		}
+		_frameIndex++;
 	}
-
-	if (closestSphere < 0)
+	else
 	{
-		return Miss(ray);
+		_frameIndex = 1;
 	}
-
-	return ClosestHit(ray, closestHit, closestSphere);
-
-	//return DrawSphere(ray, *closestSphere, closestHit);
 }
 
 glm::vec4 Renderer::PerPixel(uint32_t x, uint32_t y) const
@@ -112,9 +155,9 @@ glm::vec4 Renderer::PerPixel(uint32_t x, uint32_t y) const
 		{
 			break;
 		}
-		
+
 		const Material& material = _activeScene->Materials[sphere.MaterialIndex];
-		
+
 		auto sphereColor = material.Albedo;
 		sphereColor *= lightIntensity;
 
@@ -127,6 +170,29 @@ glm::vec4 Renderer::PerPixel(uint32_t x, uint32_t y) const
 	}
 
 	return glm::vec4(color, 1.0f);
+}
+
+Renderer::HitPayload Renderer::TraceRay(const Ray& ray) const
+{
+	int closestSphere = -1;
+	float closestHit = std::numeric_limits<float>::max();
+	for (size_t i = 0; i < _activeScene->Spheres.size(); i++)
+	{
+		const auto& sphere = _activeScene->Spheres[i];
+		if (IntersectSphere(ray, sphere, closestHit))
+		{
+			closestSphere = static_cast<int>(i);
+		}
+	}
+
+	if (closestSphere < 0)
+	{
+		return Miss(ray);
+	}
+
+	return ClosestHit(ray, closestHit, closestSphere);
+
+	//return DrawSphere(ray, *closestSphere, closestHit);
 }
 
 Renderer::HitPayload Renderer::ClosestHit(const Ray& ray, float hitDistance, int objectIndex) const
